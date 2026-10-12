@@ -1,4 +1,5 @@
 import requests
+from urllib.parse import urlsplit
 
 
 SECURITY_HEADERS = {
@@ -28,8 +29,52 @@ def scan_web_target(url, timeout=5):
     Perform a passive web-security configuration assessment.
     """
 
-    if not url.startswith(("http://", "https://")):
+    if not isinstance(url, str) or not url.strip():
+        return {"url": url, "error": "A valid URL is required."}
+
+    url = url.strip()
+
+    # Preserve the existing behavior of adding HTTPS when no scheme is given.
+    if "://" not in url:
         url = "https://" + url
+
+    try:
+        parsed_url = urlsplit(url)
+
+        if parsed_url.scheme.lower() not in ("http", "https"):
+            return {
+                "url": url,
+                "error": "Only HTTP and HTTPS URLs are supported."
+            }
+
+        if not parsed_url.hostname:
+            return {
+                "url": url,
+                "error": "The URL must include a hostname."
+            }
+
+        # Validate the port if one was explicitly supplied.
+        _ = parsed_url.port
+
+        if parsed_url.username is not None or parsed_url.password is not None:
+            return {
+                "url": url,
+                "error": "URLs containing embedded credentials are not allowed."
+            }
+
+        timeout = float(timeout)
+
+        if not 0 < timeout <= 30:
+            return {
+                "url": url,
+                "error": "Timeout must be greater than 0 and at most 30 seconds."
+            }
+
+    except (ValueError, TypeError, OverflowError):
+        return {
+            "url": url,
+            "error": "Invalid URL or timeout value."
+        }
 
     try:
         response = requests.get(
@@ -48,7 +93,6 @@ def scan_web_target(url, timeout=5):
     headers = response.headers
 
     for header, description in SECURITY_HEADERS.items():
-
         if header not in headers:
             findings.append({
                 "type": "Missing Security Header",
@@ -59,7 +103,6 @@ def scan_web_target(url, timeout=5):
     cookies = []
 
     for cookie in response.cookies:
-
         cookies.append({
             "name": cookie.name,
             "secure": cookie.secure,
@@ -110,9 +153,7 @@ def print_web_summary(result):
     print("\nSecurity Headers:")
 
     for header, value in result["security_headers"].items():
-
         status = "Present" if value else "Missing"
-
         print(f"  {header}: {status}")
 
     print("\nCookies:")
