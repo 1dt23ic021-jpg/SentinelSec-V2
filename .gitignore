@@ -22,3 +22,5 @@ reports/
 .idea/
 .DS_Store
 Thumbs.db
+
+tests/sample_traffic.pcap
